@@ -252,6 +252,32 @@ def render_workbench_views(output_dir: Optional[str] = None) -> None:
             COLOR_PINE_2X4,
         ))
 
+
+    # 5. Drawers subsystem
+    from drawers import make_carcass, assemble_bays, CARCASS_HEIGHT, CARCASS_DEPTH
+    COLOR_PLYWOOD = (0.86, 0.76, 0.58)  # Baltic birch plywood
+    COLOR_SLIDE = (0.50, 0.55, 0.60)    # Zinc-plated steel slides
+
+    # Determine carcass offset to fit nicely under workbench
+    # Z-center: between top of lower rail and bottom of upper rail
+    carcass_center_z = lower_rail_z + CARCASS_HEIGHT / 2
+    
+    # Y-center: front flush with back of front apron
+    front_apron_back = -TOP_DEPTH / 2 + LUMBER_2X4_THICKNESS
+    carcass_center_y = front_apron_back + CARCASS_DEPTH / 2
+
+    # Translate carcass
+    c = make_carcass().translate((0, carcass_center_y, carcass_center_z))
+    items.append((c, COLOR_PLYWOOD))
+
+    # To color the slides differently from the drawers, we would need them as separate parts.
+    # Since assemble_bays() returns a fused compound of drawers and slides, 
+    # we can color the whole thing as plywood for now, or just leave it. 
+    # Wait, let's just color it as plywood for simplicity, or modify assemble_bays to return lists?
+    # For now, color the whole bay compound as plywood.
+    b = assemble_bays().translate((0, carcass_center_y, carcass_center_z))
+    items.append((b, COLOR_PLYWOOD))
+
     # Render views
     render_shaded(
         items,
@@ -279,7 +305,6 @@ def render_workbench_views(output_dir: Optional[str] = None) -> None:
         parallel_projection=True,
         parallel_scale=620,
     )
-
 
 if __name__ == "__main__":
     render_workbench_views()
