@@ -1,0 +1,7 @@
+exports/
+.idea/
+__pycache__/
+*.pyc
+.vscode/
+.venv/
+walkthrough.md
