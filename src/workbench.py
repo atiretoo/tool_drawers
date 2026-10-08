@@ -16,12 +16,22 @@
 # along with tool_drawers.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-Workbench parametric model drafting for tool_drawers.
+Workbench parametric CAD model drafting for tool_drawers.
 
 Coordinate System Convention (3D printer & CAD standard):
-  - X: Left - Right (Width)
-  - Y: Front - Back (Depth)
-  - Z: Up - Down (Height, Floor at Z = 0)
+  - X: Left - Right (Width, 122.0 cm)
+  - Y: Front - Back (Depth, 90.8 cm)
+  - Z: Up - Down (Height, Floor at Z = 0, Top surface at 101.3 cm)
+
+Construction & Joinery:
+  - Top: Half solid-core door (122.0 cm x 90.8 cm x 4.3 cm).
+  - Front & rear rails (top & bottom): 2x4s spanning full width along X,
+    screwed into the legs from the sides/front; legs are set back along Y by 1.5".
+  - Left & right cross rails (top & bottom): 2x4s running along Y, fitted in
+    half-lap joints with the laminated legs so the outer faces of the legs
+    are flush with the left and right edges of the top.
+  - Legs: Each leg is 2 2x4s laminated (glued and screwed on wide faces),
+    with half-lap notches in the outer 2x4 for the cross rails.
 """
 
 import cadquery as cq
@@ -42,11 +52,10 @@ TOP_THICKNESS = 43.0               # 4.3 cm along Z (thickness)
 
 # Measured Elevations from Floor (Z = 0)
 BENCH_TOTAL_HEIGHT = 1013.0        # 101.3 cm to top surface of bench
-BOTTOM_APRON_ELEVATION = 152.0     # 15.2 cm above floor to bottom of lower stretchers/aprons
+BOTTOM_APRON_ELEVATION = 152.0     # 15.2 cm above floor to bottom of lower rails / stretchers
 
 # Framing & Positioning Parameters
-TOP_OVERHANG_X = 0.0               # Overhang along width (flush: 0.0 mm)
-TOP_OVERHANG_Y = 0.0               # Overhang along depth (flush: 0.0 mm)
+LEG_SETBACK_Y = LUMBER_2X4_THICKNESS  # 38.1 mm (1.5") setback from front and rear edges
 
 
 # ----------------------------------------------------------------------
@@ -92,78 +101,104 @@ def make_workbench() -> cq.Workplane:
     """
     Assemble the complete workbench structure:
       - Top slab at BENCH_TOTAL_HEIGHT
-      - Upper aprons around the perimeter directly under the top
-      - Lower stretchers / bottom aprons 15.2 cm above the floor
-      - Four corner legs, each laminated from two 2x4s inside the aprons
+      - Front and rear rails (top and bottom) spanning full width (1220 mm) along X
+      - Left and right cross rails (top and bottom) along Y in half-lap joints with legs
+      - Four corner laminated legs flush with top on left and right, set back 1.5" from front/rear
     """
     underside_z = BENCH_TOTAL_HEIGHT - TOP_THICKNESS
+    upper_rail_z = underside_z - LUMBER_2X4_WIDTH / 2
+    lower_rail_z = BOTTOM_APRON_ELEVATION + LUMBER_2X4_WIDTH / 2
 
     # 1. Top
     bench_top = make_top().translate((0, 0, BENCH_TOTAL_HEIGHT - TOP_THICKNESS / 2))
 
-    # 2. Upper Aprons (wide face parallel to Z axis)
-    upper_apron_z = underside_z - LUMBER_2X4_WIDTH / 2
-    side_apron_len = TOP_DEPTH - 2 * LUMBER_2X4_THICKNESS
-
-    # Front and back aprons run full width across the front & back edges
-    apron_front = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
-        0, -TOP_DEPTH / 2 + LUMBER_2X4_THICKNESS / 2, upper_apron_z
+    # 2. Front & Rear Rails (top and bottom, spanning full width across front/back edges)
+    # Front rails: at Y = -TOP_DEPTH / 2 + LUMBER_2X4_THICKNESS / 2
+    front_top = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
+        0, -TOP_DEPTH / 2 + LUMBER_2X4_THICKNESS / 2, upper_rail_z
     ))
-    apron_back = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
-        0, TOP_DEPTH / 2 - LUMBER_2X4_THICKNESS / 2, upper_apron_z
+    front_bot = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
+        0, -TOP_DEPTH / 2 + LUMBER_2X4_THICKNESS / 2, lower_rail_z
     ))
 
-    # Left and right side aprons fit between front and back aprons
-    apron_left = make_2x4(side_apron_len, axis="Y", wide_axis="Z").translate((
-        -TOP_WIDTH / 2 + LUMBER_2X4_THICKNESS / 2, 0, upper_apron_z
+    # Rear rails: at Y = TOP_DEPTH / 2 - LUMBER_2X4_THICKNESS / 2
+    rear_top = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
+        0, TOP_DEPTH / 2 - LUMBER_2X4_THICKNESS / 2, upper_rail_z
     ))
-    apron_right = make_2x4(side_apron_len, axis="Y", wide_axis="Z").translate((
-        TOP_WIDTH / 2 - LUMBER_2X4_THICKNESS / 2, 0, upper_apron_z
-    ))
-
-    # 3. Lower Aprons / Stretchers (elevated 15.2 cm above floor)
-    lower_apron_z = BOTTOM_APRON_ELEVATION + LUMBER_2X4_WIDTH / 2
-
-    stretcher_front = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
-        0, -TOP_DEPTH / 2 + LUMBER_2X4_THICKNESS / 2, lower_apron_z
-    ))
-    stretcher_back = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
-        0, TOP_DEPTH / 2 - LUMBER_2X4_THICKNESS / 2, lower_apron_z
-    ))
-    stretcher_left = make_2x4(side_apron_len, axis="Y", wide_axis="Z").translate((
-        -TOP_WIDTH / 2 + LUMBER_2X4_THICKNESS / 2, 0, lower_apron_z
-    ))
-    stretcher_right = make_2x4(side_apron_len, axis="Y", wide_axis="Z").translate((
-        TOP_WIDTH / 2 - LUMBER_2X4_THICKNESS / 2, 0, lower_apron_z
+    rear_bot = make_2x4(TOP_WIDTH, axis="X", wide_axis="Z").translate((
+        0, TOP_DEPTH / 2 - LUMBER_2X4_THICKNESS / 2, lower_rail_z
     ))
 
-    # 4. Four Legs (2 2x4s glued and screwed together on wide faces)
-    # Leg height: from floor (Z = 0) to underside of top
-    leg_len = underside_z
-    leg_z = leg_len / 2
+    # 3. Cross Rails (Left & Right along Y, in half-lap joints with legs)
+    # Span along Y between the front and rear rails:
+    cross_rail_len = TOP_DEPTH - 2 * LUMBER_2X4_THICKNESS
 
-    legs = []
+    # Left cross rails (flush with left edge of top at X = -TOP_WIDTH / 2)
+    left_top = make_2x4(cross_rail_len, axis="Y", wide_axis="Z").translate((
+        -TOP_WIDTH / 2 + LUMBER_2X4_THICKNESS / 2, 0, upper_rail_z
+    ))
+    left_bot = make_2x4(cross_rail_len, axis="Y", wide_axis="Z").translate((
+        -TOP_WIDTH / 2 + LUMBER_2X4_THICKNESS / 2, 0, lower_rail_z
+    ))
+
+    # Right cross rails (flush with right edge of top at X = TOP_WIDTH / 2)
+    right_top = make_2x4(cross_rail_len, axis="Y", wide_axis="Z").translate((
+        TOP_WIDTH / 2 - LUMBER_2X4_THICKNESS / 2, 0, upper_rail_z
+    ))
+    right_bot = make_2x4(cross_rail_len, axis="Y", wide_axis="Z").translate((
+        TOP_WIDTH / 2 - LUMBER_2X4_THICKNESS / 2, 0, lower_rail_z
+    ))
+
+    # 4. Laminated Legs (2 2x4s glued & screwed together on wide faces)
+    # Set back along Y by 1.5" (LUMBER_2X4_THICKNESS) from front and rear rails:
+    front_leg_y = -TOP_DEPTH / 2 + LEG_SETBACK_Y + LUMBER_2X4_WIDTH / 2
+    rear_leg_y = TOP_DEPTH / 2 - LEG_SETBACK_Y - LUMBER_2X4_WIDTH / 2
+
+    leg_parts = []
     for x_sign in [-1, 1]:
-        for y_sign in [-1, 1]:
-            # Center of the 3.5" wide face along X:
-            x_center = x_sign * (TOP_WIDTH / 2 - LUMBER_2X4_THICKNESS - LUMBER_2X4_WIDTH / 2)
-            # Two laminated boards along Y (wide faces touching):
-            # Outer board (touches front/back apron):
-            y1 = y_sign * (TOP_DEPTH / 2 - LUMBER_2X4_THICKNESS - LUMBER_2X4_THICKNESS / 2)
-            p1 = make_2x4(leg_len, axis="Z", wide_axis="X").translate((x_center, y1, leg_z))
-            # Inner board:
-            y2 = y_sign * (TOP_DEPTH / 2 - LUMBER_2X4_THICKNESS - 1.5 * LUMBER_2X4_THICKNESS)
-            p2 = make_2x4(leg_len, axis="Z", wide_axis="X").translate((x_center, y2, leg_z))
-            legs.extend([p1, p2])
+        # Inner 2x4 of leg (continuous from floor Z=0 to underside_z)
+        inner_x = x_sign * (TOP_WIDTH / 2 - LUMBER_2X4_THICKNESS - LUMBER_2X4_THICKNESS / 2)
+        inner_f = make_2x4(underside_z, axis="Z", wide_axis="Y").translate((
+            inner_x, front_leg_y, underside_z / 2
+        ))
+        inner_r = make_2x4(underside_z, axis="Z", wide_axis="Y").translate((
+            inner_x, rear_leg_y, underside_z / 2
+        ))
+        leg_parts.extend([inner_f, inner_r])
 
-    # Combine into unified model
+        # Outer 2x4 of leg (flush with outer edge at X = ±TOP_WIDTH / 2, with half-lap notches)
+        outer_x = x_sign * (TOP_WIDTH / 2 - LUMBER_2X4_THICKNESS / 2)
+
+        # Bottom segment: floor (Z = 0) to bottom rail elevation (Z = 152 mm)
+        bot_seg_h = BOTTOM_APRON_ELEVATION
+        out_b_f = make_2x4(bot_seg_h, axis="Z", wide_axis="Y").translate((
+            outer_x, front_leg_y, bot_seg_h / 2
+        ))
+        out_b_r = make_2x4(bot_seg_h, axis="Z", wide_axis="Y").translate((
+            outer_x, rear_leg_y, bot_seg_h / 2
+        ))
+
+        # Mid segment: between bottom rail top (240.9 mm) and top rail bottom (881.1 mm)
+        mid_bot_z = BOTTOM_APRON_ELEVATION + LUMBER_2X4_WIDTH
+        mid_top_z = underside_z - LUMBER_2X4_WIDTH
+        mid_seg_h = mid_top_z - mid_bot_z
+        out_m_f = make_2x4(mid_seg_h, axis="Z", wide_axis="Y").translate((
+            outer_x, front_leg_y, mid_bot_z + mid_seg_h / 2
+        ))
+        out_m_r = make_2x4(mid_seg_h, axis="Z", wide_axis="Y").translate((
+            outer_x, rear_leg_y, mid_bot_z + mid_seg_h / 2
+        ))
+
+        leg_parts.extend([out_b_f, out_b_r, out_m_f, out_m_r])
+
+    # Combine all parts into unified model
     model = (
         bench_top
-        .union(apron_front).union(apron_back).union(apron_left).union(apron_right)
-        .union(stretcher_front).union(stretcher_back).union(stretcher_left).union(stretcher_right)
+        .union(front_top).union(front_bot).union(rear_top).union(rear_bot)
+        .union(left_top).union(left_bot).union(right_top).union(right_bot)
     )
-    for leg in legs:
-        model = model.union(leg)
+    for lp in leg_parts:
+        model = model.union(lp)
 
     return model
 
