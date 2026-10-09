@@ -29,12 +29,14 @@ SLIDE_HEIGHT = 45.0        # standard full-extension height
 
 DRAWER_WALL_THICKNESS = 12.7
 DRAWER_BOTTOM_THICKNESS = 12.7
+FALSE_FRONT_THICKNESS = 12.7
 
 BAY_WIDTH = (CARCASS_WIDTH - 3 * CARCASS_THICKNESS) / 2.0
 DRAWER_BOX_WIDTH = BAY_WIDTH - 2 * SLIDE_THICKNESS
 DRAWER_BOX_DEPTH = SLIDE_LENGTH
 
-DRAWER_HEIGHTS = [65.0, 75.0, 95.0, 125.0, 170.0]
+# Heights ordered from bottom-up (Deepest at bottom, shallowest at top)
+DRAWER_HEIGHTS = [172.0, 116.0, 102.0, 75.0, 65.0]
 VERTICAL_GAP = 12.0
 
 
@@ -99,20 +101,30 @@ def make_slide() -> cq.Workplane:
     return cq.Workplane("XY").box(SLIDE_THICKNESS, SLIDE_LENGTH, SLIDE_HEIGHT)
 
 
-def assemble_bays() -> cq.Workplane:
+def assemble_bays(build_left: bool = True, build_right: bool = False) -> cq.Workplane:
     """
-    Creates both left and right bays of drawers and slides.
+    Creates left and/or right bays of drawers and slides, with false fronts.
     """
     parts = []
     
     start_z = -CARCASS_HEIGHT/2 + CARCASS_THICKNESS
     
-    left_bay_x = -CARCASS_WIDTH/4 - CARCASS_THICKNESS/4
-    right_bay_x = CARCASS_WIDTH/4 + CARCASS_THICKNESS/4
+    bays_to_build = []
+    if build_left:
+        bays_to_build.append(-CARCASS_WIDTH/4 - CARCASS_THICKNESS/4)
+    if build_right:
+        bays_to_build.append(CARCASS_WIDTH/4 + CARCASS_THICKNESS/4)
     
-    y_front_flush = -CARCASS_DEPTH/2 + SLIDE_LENGTH/2
+    # False fronts sit exactly in front of the drawer box.
+    # The carcass front edge is at -CARCASS_DEPTH/2.
+    # To keep the false front flush with the carcass edge (so it looks built-in),
+    # the front face of the false front is at -CARCASS_DEPTH/2.
+    # That means the drawer box front face must be pushed back by FALSE_FRONT_THICKNESS.
+    y_drawer_box_center = -CARCASS_DEPTH/2 + FALSE_FRONT_THICKNESS + DRAWER_BOX_DEPTH/2
     
-    for bay_x in [left_bay_x, right_bay_x]:
+    front_width = BAY_WIDTH - 3.0  # 1.5mm reveal on left and right
+    
+    for bay_x in bays_to_build:
         current_z = start_z + VERTICAL_GAP
         
         for dh in DRAWER_HEIGHTS:
@@ -120,24 +132,34 @@ def assemble_bays() -> cq.Workplane:
             
             # Drawer
             drawer = make_drawer_box(DRAWER_BOX_WIDTH, DRAWER_BOX_DEPTH, dh)
-            parts.append(drawer.translate((bay_x, y_front_flush, drawer_z)))
+            parts.append(drawer.translate((bay_x, y_drawer_box_center, drawer_z)))
+            
+            # False Front
+            front_height = dh + VERTICAL_GAP - 3.0  # Cover most of the gap
+            front = cq.Workplane("XY").box(front_width, FALSE_FRONT_THICKNESS, front_height)
+            front_y = -CARCASS_DEPTH/2 + FALSE_FRONT_THICKNESS/2
+            front_z = current_z + (dh + VERTICAL_GAP)/2.0 - 1.5 # centered in opening
+            parts.append(front.translate((bay_x, front_y, front_z)))
             
             # Slides
             slide = make_slide()
             slide_left_x = bay_x - DRAWER_BOX_WIDTH/2 - SLIDE_THICKNESS/2
             slide_right_x = bay_x + DRAWER_BOX_WIDTH/2 + SLIDE_THICKNESS/2
             
-            parts.append(slide.translate((slide_left_x, y_front_flush, drawer_z)))
-            parts.append(slide.translate((slide_right_x, y_front_flush, drawer_z)))
+            parts.append(slide.translate((slide_left_x, y_drawer_box_center, drawer_z)))
+            parts.append(slide.translate((slide_right_x, y_drawer_box_center, drawer_z)))
             
             current_z += dh + VERTICAL_GAP
             
+    if not parts:
+        return cq.Workplane("XY")
+        
     comp = cq.Compound.makeCompound([p.val() for p in parts])
     return cq.Workplane(comp)
 
 if __name__ == '__main__':
     c = make_carcass()
-    b = assemble_bays()
+    b = assemble_bays(build_left=True, build_right=False)
     
     import os
     export_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "exports")
